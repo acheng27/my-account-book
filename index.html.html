@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的精緻帳本 v2.2 - 增強版</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg: #fdfaf5; --primary: #e8c3b9; --secondary: #a3b18a; --text: #5d5d5d; --danger: #e5989b; }
+        body { font-family: "Microsoft JhengHei", sans-serif; background: var(--bg); color: var(--text); padding: 10px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 500px; background: #fff; padding: 20px; border-radius: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); margin-bottom: 20px; transition: transform 0.3s ease; }
+        
+        /* UI 優化：簡單動畫 */
+        .container:hover { transform: translateY(-2px); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .page-content { animation: fadeIn 0.4s ease-out; }
+
+        .tab-menu { display: flex; justify-content: space-around; margin-bottom: 20px; border-bottom: 2px solid #eee; }
+        .tab { padding: 10px; cursor: pointer; font-weight: bold; color: #ccc; transition: 0.3s; }
+        .tab.active { color: var(--secondary); border-bottom: 2px solid var(--secondary); }
+        
+        .form-group { margin-bottom: 12px; }
+        label { display: block; font-size: 0.85em; margin-bottom: 4px; color: #888; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #eee; border-radius: 10px; box-sizing: border-box; font-size: 16px; transition: border 0.3s; }
+        input:focus { border-color: var(--secondary); outline: none; }
+        
+        .btn { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: filter 0.2s; }
+        .btn:active { filter: brightness(0.9); }
+        .btn-secondary { background: #84a59d; margin-top: 5px; }
+        .asset-card { background: #f9f9f9; padding: 15px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; border-left: 4px solid var(--secondary); }
+        
+        .hidden { display: none !important; }
+        .history-item { padding: 12px; border-bottom: 1px solid #f5f5f5; font-size: 0.9em; display: flex; justify-content: space-between; align-items: center; }
+        .type-tag { font-size: 0.75em; padding: 2px 6px; border-radius: 4px; margin-right: 5px; color: white; }
+        .tag-支出 { background: #e5989b; } .tag-收入 { background: #b5c99a; } .tag-轉帳 { background: #84a59d; }
+        
+        .del-btn { background: #ffeded; color: #ff5e5e; border: none; border-radius: 5px; padding: 5px 10px; cursor: pointer; font-size: 0.8em; margin-left: 10px; }
+        .filter-section { background: #fefefe; padding: 10px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #eee; text-align: center; }
+        .month-selector { border: none; background: transparent; font-size: 1.1em; font-weight: bold; color: var(--secondary); cursor: pointer; width: auto; }
+        
+        /* 預算提醒樣式 */
+        .budget-warning { color: var(--danger) !important; font-weight: bold; animation: shake 0.5s ease-in-out; }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+
+        .action-row { display: flex; gap: 10px; margin-top: 20px; }
+        .chart-container { height: 220px; margin-bottom: 20px; }
+        .analysis-title { font-size: 0.9em; margin: 15px 0 5px; color: #777; border-left: 3px solid var(--primary); padding-left: 8px; }
+
+        /* 負債與彈窗樣式 */
+        .asset-summary-row { display: flex; justify-content: space-between; text-align: center; margin-bottom: 20px; background: #f9f9f9; padding: 15px; border-radius: 10px; }
+        .asset-summary-item { flex: 1; }
+        .asset-summary-item:first-child { border-right: 1px solid #ddd; }
+        .debt-card { background: #fffafaf0; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 4px solid var(--danger); box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 20px; border-radius: 15px; width: 90%; max-width: 400px; animation: fadeIn 0.3s ease-out; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        
+        .pay-btn { background: #84a59d; color: white; border: none; border-radius: 5px; padding: 5px 12px; cursor: pointer; font-size: 0.85em; transition: 0.3s; }
+        .pay-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* 新增：進度條樣式 */
+        .progress-container { width: 100%; background-color: #eee; border-radius: 10px; margin: 8px 0; height: 10px; overflow: hidden; }
+        .progress-bar { height: 100%; background-color: var(--secondary); transition: width 0.5s ease-in-out; }
+        .progress-text { font-size: 0.75em; color: #666; text-align: right; display: block; margin-top: -5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="tab-menu">
+        <div class="tab active" onclick="switchTab('input')">記帳</div>
+        <div class="tab" onclick="switchTab('assets')">資產</div>
+        <div class="tab" onclick="switchTab('history')">每月總覽</div>
+    </div>
+
+    <div id="page-input" class="page-content">
+        <div class="form-group">
+            <label>日期</label>
+            <input type="date" id="date-input">
+        </div>
+        <div class="form-group">
+            <label>大類別</label>
+            <select id="main-type" onchange="updateSubCategories()">
+                <option value="支出">支出</option>
+                <option value="收入">收入</option>
+                <option value="轉帳">轉帳</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>項目分類 (括號內為參考)</label>
+            <select id="sub-category"></select>
+        </div>
+        <div class="form-group">
+            <label>支付/收款方式</label>
+            <select id="pay-method" onchange="toggleBankSelect()">
+                <option value="現金">現金</option>
+                <option value="魔法小卡">魔法小卡 (信用卡)</option>
+                <option value="銀行轉帳">銀行轉帳/戶頭</option>
+            </select>
+        </div>
+        <div id="bank-select-area" class="form-group hidden">
+            <label>銀行/卡片名稱</label>
+            <input type="text" id="bank-name" list="bank-list" placeholder="輸入銀行名稱...">
+            <datalist id="bank-list">
+                <option value="中信"> <option value="國泰"> <option value="台新"> <option value="郵局">
+            </datalist>
+        </div>
+        <div class="form-group">
+            <label>幣別 & 金額</label>
+            <div style="display: flex; gap: 5px;">
+                <select id="currency" style="width: 35%;">
+                    <option value="TWD">台幣 (TWD)</option>
+                    <option value="JPY">日幣 (JPY)</option>
+                    <option value="KRW">韓幣 (KRW)</option>
+                    <option value="USD">美金 (USD)</option>
+                    <option value="CNY">人民幣 (CNY)</option>
+                </select>
+                <input type="number" id="amount" placeholder="0" style="width: 65%;">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>備註 (買了什麼？)</label>
+            <textarea id="note" rows="2" placeholder="詳細內容..."></textarea>
+        </div>
+        <button class="btn" onclick="addRecord()">存入帳本</button>
+    </div>
+
+    <div id="page-assets" class="hidden page-content">
+        <h3 style="text-align: center; margin-bottom: 5px;">預估淨資產 (TWD)</h3>
+        <h1 id="net-worth" style="text-align: center; color: var(--secondary); transition: all 0.5s; margin-top: 0;">$ 0</h1>
+        
+        <div class="asset-summary-row">
+            <div class="asset-summary-item">
+                <div style="font-size: 0.85em; color: #888;">總資產(存款+投資)</div>
+                <div id="total-assets" style="font-size: 1.2em; font-weight: bold; color: var(--secondary);">$ 0</div>
+            </div>
+            <div class="asset-summary-item">
+                <div style="font-size: 0.85em; color: #888;">總負債</div>
+                <div id="total-liabilities" style="font-size: 1.2em; font-weight: bold; color: var(--danger);">$ 0</div>
+            </div>
+        </div>
+
+        <div class="analysis-title">帳戶餘額</div>
+        <div id="asset-list"></div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 25px; border-bottom: 2px solid #eee; padding-bottom: 5px;">
+            <div class="analysis-title" style="margin: 0; border: none; padding: 0; font-weight: bold; color: var(--text);">負債項目管理</div>
+            <button class="btn" style="width: auto; padding: 6px 12px; margin: 0; font-size: 0.85em; background: var(--danger);" onclick="openDebtModal()">+ 新增負債</button>
+        </div>
+        <div id="liability-list" style="margin-top: 10px;"></div>
+    </div>
+
+    <div id="page-history" class="hidden page-content">
+        <div class="filter-section">
+            <label>查看月份</label>
+            <input type="month" id="month-filter" class="month-selector" onchange="updateHistory()">
+            <div id="budget-info" style="font-size: 0.85em; margin-top: 5px; color: #999;"></div>
+        </div>
+        
+        <div class="analysis-title">支出分類圓餅圖</div>
+        <div class="chart-container">
+            <canvas id="chartArea"></canvas>
+        </div>
+
+        <div class="analysis-title">年度收支趨勢 (近半年)</div>
+        <div class="chart-container">
+            <canvas id="trendChart"></canvas>
+        </div>
+
+        <div class="analysis-title">交易明細</div>
+        <div id="history-list"></div>
+        
+        <div class="action-row">
+            <button class="btn btn-secondary" onclick="exportToCSV()">匯出 CSV 備份</button>
+            <button class="btn" style="background: #ddd; color: #666;" onclick="clearAll()">清空全部</button>
+        </div>
+    </div>
+</div>
+
+<div id="debt-modal" class="modal hidden">
+    <div class="modal-content">
+        <h3 style="text-align: center; color: var(--danger); margin-top: 0;">新增負債項目</h3>
+        <div class="form-group">
+            <label>負債名稱 (ex: 學貸、車貸)</label>
+            <input type="text" id="debt-name" placeholder="輸入負債名稱">
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <div class="form-group" style="flex: 1;">
+                <label>初始總額</label>
+                <input type="number" id="debt-initial" placeholder="0">
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>目前剩餘</label>
+                <input type="number" id="debt-remaining" placeholder="0">
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <div class="form-group" style="flex: 1;">
+                <label>每月還款</label>
+                <input type="number" id="debt-monthly" placeholder="0">
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label>總期數 (忘記可留空)</label>
+                <input type="number" id="debt-months" placeholder="自動精算">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>每月扣款日 (1~31)</label>
+            <input type="number" id="debt-date" min="1" max="31" placeholder="例如: 5">
+        </div>
+        <div class="action-row" style="margin-top: 15px;">
+            <button class="btn btn-secondary" onclick="closeDebtModal()">取消</button>
+            <button class="btn" style="background: var(--danger);" onclick="saveDebt()">儲存負債</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let records = JSON.parse(localStorage.getItem('records')) || [];
+    let liabilities = JSON.parse(localStorage.getItem('liabilities')) || [];
+    let rates = JSON.parse(localStorage.getItem('rates')) || { JPY: 4.6, KRW: 41.5, USD: 0.031, CNY: 0.22, TWD: 1 };
+    
+    const subCats = {
+        "支出": [
+            {n: "固定支出", h: "房租/房貸、水電瓦斯、網路、保險、月票"},
+            {n: "食", h: "三餐、飲料、零食"},
+            {n: "衣", h: "衣物、鞋包"},
+            {n: "住", h: "家具、維修"},
+            {n: "行", h: "油錢、停車、交通費"},
+            {n: "育樂", h: "電影、旅遊、遊戲"},
+            {n: "醫療", h: "掛號、藥品"},
+            {n: "訂閱支出", h: "訂閱服務"},
+            {n: "創業支出", h: "耗材、設備"}
+        ],
+        "收入": [{n: "薪水", h: ""}, {n: "獎金", h: ""}, {n: "意外財", h: ""}, {n: "其他", h: ""}],
+        "轉帳": [{n: "帳戶互轉", h: ""}]
+    };
+
+    window.onload = () => {
+        const today = new Date();
+        document.getElementById('date-input').value = today.toISOString().split('T')[0];
+        document.getElementById('month-filter').value = today.toISOString().slice(0, 7);
+        updateSubCategories();
+        refreshRates();
+    };
+
+    function refreshRates() {
+        fetch('https://open.er-api.com/v6/latest/TWD').then(res => res.json()).then(data => {
+            if(data && data.rates) {
+                rates = data.rates;
+                localStorage.setItem('rates', JSON.stringify(rates));
+            }
+        }).catch(() => console.log("離線模式"));
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        if(event) event.target.classList.add('active');
+        ['input', 'assets', 'history'].forEach(p => document.getElementById('page-'+p).classList.add('hidden'));
+        document.getElementById('page-' + tab).classList.remove('hidden');
+        if(tab === 'assets') updateAssets();
+        if(tab === 'history') updateHistory();
+    }
+
+    function updateSubCategories() {
+        const main = document.getElementById('main-type').value;
+        const sub = document.getElementById('sub-category');
+        sub.innerHTML = subCats[main].map(c => `<option value="${c.n}">${c.n} ${c.h ? '('+c.h+')' : ''}</option>`).join('');
+    }
+
+    function toggleBankSelect() {
+        const method = document.getElementById('pay-method').value;
+        document.getElementById('bank-select-area').className = (method === '現金') ? 'form-group hidden' : 'form-group';
+    }
+
+    function addRecord() {
+        const amount = parseFloat(document.getElementById('amount').value);
+        if(!amount || isNaN(amount)) return alert("請輸入有效金額");
+        
+        const curr = document.getElementById('currency').value;
+        const rate = (rates[curr] && rates[curr] !== 0) ? rates[curr] : 1;
+        
+        const record = {
+            id: Date.now(),
+            date: document.getElementById('date-input').value,
+            type: document.getElementById('main-type').value,
+            cat: document.getElementById('sub-category').value,
+            method: document.getElementById('pay-method').value,
+            bank: document.getElementById('bank-name').value || "無",
+            currency: curr,
+            origAmount: amount,
+            twdAmount: curr === 'TWD' ? amount : amount / rate,
+            note: document.getElementById('note').value
+        };
+        records.push(record);
+        localStorage.setItem('records', JSON.stringify(records));
+        alert("存入成功！");
+        document.getElementById('amount').value = "";
+        document.getElementById('note').value = "";
+    }
+
+    function deleteRecord(id) {
+        if(confirm("確定要刪除這筆紀錄嗎？")) {
+            records = records.filter(r => r.id !== id);
+            localStorage.setItem('records', JSON.stringify(records));
+            updateHistory();
+        }
+    }
+
+    function openDebtModal() {
+        document.getElementById('debt-modal').classList.remove('hidden');
+    }
+
+    function closeDebtModal() {
+        document.getElementById('debt-modal').classList.add('hidden');
+        ['debt-name', 'debt-initial', 'debt-remaining', 'debt-monthly', 'debt-months', 'debt-date'].forEach(id => document.getElementById(id).value = '');
+    }
+
+    function saveDebt() {
+        const name = document.getElementById('debt-name').value;
+        const initial = parseFloat(document.getElementById('debt-initial').value) || 0;
+        const remaining = parseFloat(document.getElementById('debt-remaining').value) || 0;
+        const monthly = parseFloat(document.getElementById('debt-monthly').value) || 0;
+        let months = parseInt(document.getElementById('debt-months').value);
+        const date = parseInt(document.getElementById('debt-date').value) || 1;
+
+        if(!name) return alert("請輸入負債名稱");
+
+        if(isNaN(months) || months <= 0) {
+            if(monthly > 0 && initial > 0) {
+                months = Math.ceil(initial / monthly);
+            } else {
+                months = 0;
+            }
+        }
+
+        const newDebt = { 
+            id: Date.now(), 
+            name, 
+            initial, 
+            remaining, 
+            monthly, 
+            months, 
+            date,
+            lastPaidMonth: "" 
+        };
+        liabilities.push(newDebt);
+        localStorage.setItem('liabilities', JSON.stringify(liabilities));
+        
+        closeDebtModal();
+        updateAssets();
+    }
+
+    function deleteDebt(id) {
+        if(confirm("確定要刪除這筆負債項目嗎？")) {
+            liabilities = liabilities.filter(d => d.id !== id);
+            localStorage.setItem('liabilities', JSON.stringify(liabilities));
+            updateAssets();
+        }
+    }
+
+    function payDebt(id) {
+        const currentMonth = new Date().toISOString().slice(0, 7); 
+        const debtIndex = liabilities.findIndex(d => d.id === id);
+        
+        if (debtIndex !== -1) {
+            const debt = liabilities[debtIndex];
+            const newRemaining = Math.max(0, debt.remaining - debt.monthly);
+            liabilities[debtIndex].remaining = newRemaining;
+            liabilities[debtIndex].lastPaidMonth = currentMonth;
+            
+            const payRecord = {
+                id: Date.now(),
+                date: new Date().toISOString().split('T')[0],
+                type: "支出",
+                cat: "固定支出",
+                method: "銀行轉帳",
+                bank: "負債繳還",
+                currency: "TWD",
+                origAmount: debt.monthly,
+                twdAmount: debt.monthly,
+                note: `繳納負債：${debt.name}`
+            };
+            records.push(payRecord);
+            
+            localStorage.setItem('liabilities', JSON.stringify(liabilities));
+            localStorage.setItem('records', JSON.stringify(records));
+            
+            alert(`${debt.name} 本月繳費完成！剩餘金額：$${newRemaining.toLocaleString()}`);
+            updateAssets();
+        }
+    }
+
+    function updateAssets() {
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        let assets = { "現金": 0 };
+        records.forEach(r => {
+            let key = r.method === "現金" ? "現金" : r.bank;
+            if(!assets[key]) assets[key] = 0;
+            if(r.type === "支出") assets[key] -= r.twdAmount;
+            else if(r.type === "收入") assets[key] += r.twdAmount;
+        });
+        
+        let html = ""; let totalAssets = 0;
+        for(let name in assets) {
+            totalAssets += assets[name];
+            html += `<div class="asset-card"><span>${name}</span><span>$ ${Math.round(assets[name]).toLocaleString()}</span></div>`;
+        }
+        document.getElementById('asset-list').innerHTML = html || '<div style="text-align:center; color:#999; font-size:0.9em;">尚無帳戶資料</div>';
+
+        let totalLiabilities = 0;
+        let debtHtml = "";
+        liabilities.forEach(d => {
+            totalLiabilities += d.remaining;
+            
+            const isPaidThisMonth = d.lastPaidMonth === currentMonth;
+            const btnText = isPaidThisMonth ? "本月已繳費" : "每月繳費";
+            const btnDisabled = isPaidThisMonth ? "disabled" : "";
+
+            // 新增：計算進度百分比
+            const progressPercent = d.initial > 0 ? Math.min(100, Math.round(((d.initial - d.remaining) / d.initial) * 100)) : 0;
+
+            debtHtml += `
+            <div class="debt-card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                    <strong style="font-size: 1.1em;">${d.name}</strong>
+                    <span style="color: var(--danger); font-weight: bold; font-size: 1.1em;">- $${d.remaining.toLocaleString()}</span>
+                </div>
+                
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: ${progressPercent}%"></div>
+                </div>
+                <span class="progress-text">已還款進度: ${progressPercent}%</span>
+
+                <div style="font-size: 0.85em; color: #777; line-height: 1.5; margin-top: 5px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>初始總額：$${d.initial.toLocaleString()}</span>
+                        <span>共 ${d.months} 期</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>每月 ${d.date} 號扣款</span>
+                        <span>每月還款：$${d.monthly.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                    <button class="pay-btn" ${btnDisabled} onclick="payDebt(${d.id})">${btnText}</button>
+                    <button class="del-btn" style="padding: 4px 10px; margin: 0;" onclick="deleteDebt(${d.id})">刪除</button>
+                </div>
+            </div>`;
+        });
+        document.getElementById('liability-list').innerHTML = debtHtml || '<div style="text-align:center; color:#999; font-size:0.9em; padding: 15px;">目前無負債紀錄，太棒了！</div>';
+
+        const netWorth = totalAssets - totalLiabilities;
+        document.getElementById('total-assets').innerText = "$ " + Math.round(totalAssets).toLocaleString();
+        document.getElementById('total-liabilities').innerText = "$ " + Math.round(totalLiabilities).toLocaleString();
+        document.getElementById('net-worth').innerText = "$ " + Math.round(netWorth).toLocaleString();
+    }
+
+    let myChart;
+    let trendChart;
+
+    function updateHistory() {
+        const targetMonth = document.getElementById('month-filter').value;
+        const filtered = records.filter(r => r.date.startsWith(targetMonth)).sort((a,b) => b.date.localeCompare(a.date));
+        const list = document.getElementById('history-list');
+        
+        const totalExpense = filtered.filter(r => r.type === "支出").reduce((sum, r) => sum + r.twdAmount, 0);
+        const budgetInfo = document.getElementById('budget-info');
+        if(totalExpense > 20000) {
+            budgetInfo.innerHTML = `本月支出：<span class="budget-warning">$${Math.round(totalExpense).toLocaleString()} (超過預算 20,000!)</span>`;
+        } else {
+            budgetInfo.innerHTML = `本月支出：$${Math.round(totalExpense).toLocaleString()}`;
+        }
+
+        list.innerHTML = filtered.map(r => `
+            <div class="history-item">
+                <div style="flex: 1;">
+                    <span class="type-tag tag-${r.type}">${r.cat}</span>
+                    <small>${r.date}</small><br>
+                    <span style="color:#999; font-size:0.85em;">[${r.method}/${r.bank}] ${r.note}</span>
+                </div>
+                <div style="text-align:right">
+                    <b>${(r.origAmount || 0).toLocaleString()} ${r.currency}</b><br>
+                    ${r.currency !== 'TWD' ? `<small style="color:#bbb">≈ $${Math.round(r.twdAmount || 0)}</small>` : ''}
+                </div>
+                <button class="del-btn" onclick="deleteRecord(${r.id})">X</button>
+            </div>
+        `).join('');
+        
+        renderChart(filtered);
+        renderTrendChart();
+    }
+
+    function renderChart(dataList) {
+        const ctx = document.getElementById('chartArea').getContext('2d');
+        if(myChart) myChart.destroy();
+        let stats = {};
+        dataList.filter(r => r.type === "支出").forEach(r => {
+            stats[r.cat] = (stats[r.cat] || 0) + r.twdAmount;
+        });
+        myChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(stats),
+                datasets: [{ data: Object.values(stats), backgroundColor: ['#e8c3b9','#a3b18a','#84a59d','#f2cc8f','#e07a5f','#3d405b','#81b29a','#f4f1de'] }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10, font: { size: 10 } } } } }
+        });
+    }
+
+    function renderTrendChart() {
+        const ctx = document.getElementById('trendChart').getContext('2d');
+        if(trendChart) trendChart.destroy();
+        
+        let months = [];
+        for(let i=5; i>=0; i--) {
+            let d = new Date();
+            d.setMonth(d.getMonth() - i);
+            months.push(d.toISOString().slice(0, 7));
+        }
+
+        let incomeData = months.map(m => records.filter(r => r.date.startsWith(m) && r.type === "收入").reduce((s, r) => s + r.twdAmount, 0));
+        let expenseData = months.map(m => records.filter(r => r.date.startsWith(m) && r.type === "支出").reduce((s, r) => s + r.twdAmount, 0));
+
+        trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: months,
+                datasets: [
+                    { label: '收入', data: incomeData, borderColor: '#a3b18a', tension: 0.3, fill: false },
+                    { label: '支出', data: expenseData, borderColor: '#e5989b', tension: 0.3, fill: false }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, labels: { font: { size: 10 } } } }, scales: { y: { beginAtZero: true, ticks: { font: { size: 9 } } }, x: { ticks: { font: { size: 9 } } } } }
+        });
+    }
+
+    function exportToCSV() {
+        if(records.length === 0) return alert("目前沒有資料可以匯出喔！");
+        let csvContent = "\uFEFF"; 
+        csvContent += "日期,類型,分類,支付方式,銀行,原始金額,幣別,台幣金額,備註\n";
+        records.forEach(r => {
+            let row = [ r.date, r.type, r.cat, r.method, r.bank, r.origAmount, r.currency, Math.round(r.twdAmount), r.note ].join(",");
+            csvContent += row + "\n";
+        });
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", `我的帳本備份_${new Date().toISOString().slice(0,10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function clearAll() { if(confirm("確定清空所有資料？建議清空前先匯出備份！")) { localStorage.clear(); location.reload(); } }
+</script>
+
+</body>
+</html>
